@@ -72,12 +72,18 @@ private:
 	char words[7536][3];		//用于存储加载的文字
 	static const int REC_CHARAC_DIS = 20;			//方框与真实文字之间水平方向上的距离
 	boolean isCutted;
+	CPoint cutDownPoint;
+	CPoint cutUpPoint;
+	int downX;
+	int downY;
+	int upX;
+	int upY;
 private:
 	int m_nViewHeight;
 	int m_nVScrollPos;
 	int m_nVPageSize;
 	int LINESIZE;
-				
+	int cutHeight;		
 
 	//int m_MAX_W, m_MAX_H;
 	//int m_vtop, m_hleft;
@@ -98,6 +104,7 @@ public:
 	void clearMem();
 	void initData();
 	void drawCharacter(int move_x, int move_y);
+	void clsCutInfo();
 
 	afx_msg void OnDeal();
 	afx_msg void OnSize(UINT nType, int cx, int cy);

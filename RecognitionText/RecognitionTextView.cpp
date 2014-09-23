@@ -56,9 +56,13 @@ IMPLEMENT_DYNCREATE(CRecognitionTextView, CScrollView)
 		initData();
 		resizeX = 2;
 		resizeY = 2;
-		LINESIZE = 10;
+		LINESIZE = 60;
 		src = NULL;
 		//可以不需要初始化
+		downX = 0;
+		downY = 0;
+		upX = 0;
+		upY = 0;
 		for (int i=0; i<7536; i++)
 		{
 			for (int j=0;j<3;j++)
@@ -78,7 +82,13 @@ IMPLEMENT_DYNCREATE(CRecognitionTextView, CScrollView)
 		filePath = "";
 		isSized = false;
 		m_nVScrollPos = 0;		
+		clsCutInfo();
+	}
+
+	void CRecognitionTextView::clsCutInfo()
+	{
 		isCutted = false;
+		cutHeight = 0;
 	}
 
 	CRecognitionTextView::~CRecognitionTextView()
@@ -222,8 +232,8 @@ IMPLEMENT_DYNCREATE(CRecognitionTextView, CScrollView)
 			}
 			else
 			{
-				pdc->StretchBlt(xSt,0,upPoint.x - downPoint.x, upPoint.y - downPoint.y, &memDC, 0, 0,
-					bitinfo.bmWidth,bitinfo.bmHeight,SRCCOPY);
+				pdc->StretchBlt(cutDownPoint.x, cutDownPoint.y,cutUpPoint.x - cutDownPoint.x, cutUpPoint.y - cutDownPoint.y + cutHeight, &memDC, (cutDownPoint.x - xSt)*resizeX, cutDownPoint.y*resizeY,
+					(cutUpPoint.x - cutDownPoint.x)*resizeX, (cutUpPoint.y - cutDownPoint.y + cutHeight)*resizeY,SRCCOPY);
 
 			}
 			//删除GDI对象
@@ -310,6 +320,7 @@ IMPLEMENT_DYNCREATE(CRecognitionTextView, CScrollView)
 				}
 				filePath = fileDictionary + (CString)fileName[index];
 				//加载图片
+				clsCutInfo();
 				OnPaint();
 			}
 			else{
@@ -349,6 +360,7 @@ IMPLEMENT_DYNCREATE(CRecognitionTextView, CScrollView)
 				}
 				filePath = fileDictionary + (CString)fileName[index];
 				//加载图片
+				clsCutInfo();
 				OnPaint();
 			}
 			else{
@@ -763,6 +775,12 @@ IMPLEMENT_DYNCREATE(CRecognitionTextView, CScrollView)
 	{
 		// TODO: 在此添加命令处理程序代码
 		isCutted = true;
+		cutDownPoint = downPoint;
+		cutUpPoint = upPoint;
+		downX = (cutDownPoint.x - xSt) * resizeX;
+		downY = cutDownPoint.y * resizeY;
+		upX = (cutUpPoint.x - xSt) * resizeX;
+		upY = (cutUpPoint.y  + cutHeight)*resizeY;
 		Invalidate();
 		OnPaint();
 	}
@@ -773,11 +791,30 @@ IMPLEMENT_DYNCREATE(CRecognitionTextView, CScrollView)
 		// TODO: 在此添加消息处理程序代码和/或调用默认值
 		if (zDelta < 0)
 		{
-			OnVScroll(SB_LINEDOWN, pt.y, &m_VScrollBar);
+			OnVScroll(SB_LINEDOWN, 0, &m_VScrollBar);
+			if (!isCutted)
+			{
+				if (cutHeight <= m_nViewHeight - LINESIZE)
+				{
+					cutHeight += LINESIZE;
+				} else {
+					cutHeight = m_nViewHeight;
+				}
+			}
+
 		}
 		else if (zDelta > 0)
 		{
-			OnVScroll(SB_LINEUP, pt.y, &m_VScrollBar);
+			OnVScroll(SB_LINEUP, 0, &m_VScrollBar);
+			if (!isCutted)
+			{
+				if (cutHeight > LINESIZE + cutDownPoint.y)
+				{
+					cutHeight -= LINESIZE;
+				} else {
+					cutHeight = LINESIZE + cutDownPoint.y;
+				}
+			}
 		}
 		return CScrollView::OnMouseWheel(nFlags, zDelta, pt);
 	}
