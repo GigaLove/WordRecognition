@@ -410,6 +410,9 @@ IMPLEMENT_DYNCREATE(CRecognitionTextView, CScrollView)
 	{
 		// TODO: 在此添加消息处理程序代码和/或调用默认值
 		downPoint = point;
+		downX = (point.x - xSt) * resizeX;
+		downY = (point.y + m_nVScrollPos) * resizeY;
+		isCutted = false;
 		CScrollView::OnLButtonDown(nFlags, point);
 
 	}
@@ -419,6 +422,8 @@ IMPLEMENT_DYNCREATE(CRecognitionTextView, CScrollView)
 	{
 		// TODO: 在此添加消息处理程序代码和/或调用默认值
 		upPoint = point;
+		upX = (point.x - xSt) * resizeX;
+		upY = (point.y  + m_nVScrollPos)*resizeY;
 		CScrollView::OnLButtonUp(nFlags, point);
 	}
 
@@ -583,6 +588,7 @@ IMPLEMENT_DYNCREATE(CRecognitionTextView, CScrollView)
 				} else {
 					MessageBox(_T("请先加载文字"));
 				}
+				OnPaint();
 			}
 		}
 		else
@@ -648,7 +654,7 @@ IMPLEMENT_DYNCREATE(CRecognitionTextView, CScrollView)
 			nDelta = - m_nVScrollPos;
 		}
 		else if(nScrollPos > nMaxPos){
-			nDelta = m_nViewHeight - m_nViewHeight;
+			nDelta = 0;
 		}
 		if (nDelta != 0){
 			m_nVScrollPos += nDelta;
@@ -765,13 +771,29 @@ IMPLEMENT_DYNCREATE(CRecognitionTextView, CScrollView)
 	void CRecognitionTextView::OnImagecut()
 	{
 		// TODO: 在此添加命令处理程序代码
-		isCutted = true;
-		cutDownPoint = downPoint;
-		cutUpPoint = upPoint;
-		downX = (cutDownPoint.x - xSt) * resizeX;
-		downY = (cutDownPoint.y + cutHeight) * resizeY;
-		upX = (cutUpPoint.x - xSt) * resizeX;
-		upY = (cutUpPoint.y  + cutHeight)*resizeY;
+		if (fileCount >0) {
+			if (downX < 0)	
+				downX = 0;
+			if (downX > srcWidth) 
+				downX = srcWidth;
+			if (upX < 0)	
+				upX = 0;
+			if (upX > srcWidth) 
+				upX = srcWidth;
+			
+			if (downY < 0)
+				downY = 0;
+			if (downY > srcHeight)
+				downY = srcHeight;
+			if (upY < 0)
+				upY = 0;
+			if (upY > srcHeight)
+				upY = srcHeight;
+			isCutted = true;
+
+		} else {
+			MessageBox(_T("请先加载图片"));
+		}
 	}
 
 
@@ -781,29 +803,10 @@ IMPLEMENT_DYNCREATE(CRecognitionTextView, CScrollView)
 		if (zDelta < 0)
 		{
 			OnVScroll(SB_LINEDOWN, 0, &m_VScrollBar);
-			if (!isCutted)
-			{
-				if (cutHeight <= m_nViewHeight - LINESIZE)
-				{
-					cutHeight += LINESIZE;
-				} else {
-					cutHeight = m_nViewHeight;
-				}
-			}
-
 		}
 		else if (zDelta > 0)
 		{
 			OnVScroll(SB_LINEUP, 0, &m_VScrollBar);
-			if (!isCutted)
-			{
-				if (cutHeight > LINESIZE + cutDownPoint.y)
-				{
-					cutHeight -= LINESIZE;
-				} else {
-					cutHeight = LINESIZE + cutDownPoint.y;
-				}
-			}
 		}
 		return CScrollView::OnMouseWheel(nFlags, zDelta, pt);
 	}
