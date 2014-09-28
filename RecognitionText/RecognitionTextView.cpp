@@ -225,17 +225,8 @@ IMPLEMENT_DYNCREATE(CRecognitionTextView, CScrollView)
 			//设置图像拉伸模式
 			pdc->SetStretchBltMode(HALFTONE);
 			//拉伸图像
-			if (!isCutted)
-			{
-				pdc->StretchBlt(xSt,0,bitinfo.bmWidth / resizeX,bitinfo.bmHeight / resizeY,&memDC,0,0,
-					bitinfo.bmWidth,bitinfo.bmHeight,SRCCOPY);
-			}
-			else
-			{
-				pdc->StretchBlt(cutDownPoint.x, cutDownPoint.y,cutUpPoint.x - cutDownPoint.x, cutUpPoint.y - cutDownPoint.y + cutHeight, &memDC, (cutDownPoint.x - xSt)*resizeX, cutDownPoint.y*resizeY,
-					(cutUpPoint.x - cutDownPoint.x)*resizeX, (cutUpPoint.y - cutDownPoint.y + cutHeight)*resizeY,SRCCOPY);
-
-			}
+			pdc->StretchBlt(xSt,0,bitinfo.bmWidth / resizeX,bitinfo.bmHeight / resizeY,&memDC,0,0,
+				bitinfo.bmWidth,bitinfo.bmHeight,SRCCOPY);
 			//删除GDI对象
 			bitmap.DeleteObject();
 			//删除设备上下文环境
@@ -580,7 +571,7 @@ IMPLEMENT_DYNCREATE(CRecognitionTextView, CScrollView)
 		// TODO: 在此添加命令处理程序代码
 		if(filePath !="")
 		{
-			src = tools.deal(filePath);
+			src = tools.deal(filePath,isCutted,downX,upX,downY,upY);
 			if (src == NULL)
 				MessageBox(TEXT("加载失败！"));
 			else
@@ -778,11 +769,9 @@ IMPLEMENT_DYNCREATE(CRecognitionTextView, CScrollView)
 		cutDownPoint = downPoint;
 		cutUpPoint = upPoint;
 		downX = (cutDownPoint.x - xSt) * resizeX;
-		downY = cutDownPoint.y * resizeY;
+		downY = (cutDownPoint.y + cutHeight) * resizeY;
 		upX = (cutUpPoint.x - xSt) * resizeX;
 		upY = (cutUpPoint.y  + cutHeight)*resizeY;
-		Invalidate();
-		OnPaint();
 	}
 
 

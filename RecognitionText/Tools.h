@@ -15,8 +15,9 @@ public:
 	void doOutLine(int count,struct OutLine Out[]);
 	struct OutLinesInfo childFunction(IplImage *src,int Xline[],int count_x);
 	struct OutLinesInfo function(IplImage *src);
-	IplImage *deal(CString filePath);
-
+	IplImage *deal(CString filePath,bool isCut,int ux,int dx,int uy,int dy);
+	
+	int X,XX,Y,YY;
 public:
 	char fileName[200][50];
 	int fileNumber;

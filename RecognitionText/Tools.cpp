@@ -214,8 +214,6 @@ void Tools::FindOther(IplImage *src,int yy,int xx,struct OutLine outLine[],int *
 	int y_y[8]={-1,-1,-1,0,0,1,1,1};
 
 	int x,y;
-	int width = src->width;
-	int height = src->height;
 	int widthStep = src->widthStep;
 	//八邻域进行搜索
 	for(int i=0;i<8;i++)
@@ -224,7 +222,7 @@ void Tools::FindOther(IplImage *src,int yy,int xx,struct OutLine outLine[],int *
 		x=xx+ x_x[i];   //水平方向
 
 		//判断是否越界
-		if(y < 6 || y >= height-3 ||x < 6 || x >= width-6)
+		if(y < Y + 5 || y >= YY-3 ||x < X + 5 || x >= XX - 6)
 			continue;
 		//递归查找
 		if(src->imageData[y*widthStep+x]==0)
@@ -251,18 +249,16 @@ void Tools::FindOther(IplImage *src,int yy,int xx,struct OutLine outLine[],int *
 
 int Tools::FindST(IplImage *src,int beg, int end ,int count_y[],struct OutLine Out[])
 {
-	int width= src->width ;
-	int height = src->height;
 	int widthStep = src->widthStep;
 
 	int count = 0;
 	int sum[1];
 	struct OutLine outLine[1];
 	//对该行进行递归查找
-	for(int i=6 ; i< width - 6 ; i++)
+	for(int i=X + 6 ; i< XX - 6 ; i++)
 	{
 		//判断改行是否有字点 减少计算
-		if(count_y == 0)
+		if(count_y[i] == 0)
 			continue;
 		for(int j=beg;j< end ;j++)
 		{
@@ -388,8 +384,8 @@ void Tools::doOutLine(int count,struct OutLine Out[])
 
 struct OutLinesInfo Tools::childFunction(IplImage *src,int Xline[],int count_x)
 {
-	int width = src->width;
-	int height = src->height;
+	int width = XX - X;
+	int height = YY - Y;
 	int widthStep = src ->widthStep;
 	//初始化查找的结构体
 	int *count_y = new int[width];
@@ -416,7 +412,7 @@ struct OutLinesInfo Tools::childFunction(IplImage *src,int Xline[],int count_x)
 			//初始值
 			memset(count_y,0,sizeof(int)*width);
 			//进行该字行的垂直投影统计
-			for(int i=0;i<width;i++)
+			for(int i=X;i<XX;i++)
 			{
 				for(int j = Xline[k] ; j< Xline[k+1] ;j++)
 				{
@@ -429,7 +425,7 @@ struct OutLinesInfo Tools::childFunction(IplImage *src,int Xline[],int count_x)
 			//初始化
 			Num =0;
 			//记录超过阈值的数目
-			for(int i = 0 ; i < width ;i++)
+			for(int i = X ; i < XX ;i++)
 			{
 				if(count_y[i] > Min)
 					Num++;
@@ -476,17 +472,17 @@ struct OutLinesInfo Tools::childFunction(IplImage *src,int Xline[],int count_x)
 
 struct OutLinesInfo Tools::function(IplImage *src)
 {
-	int width = src->width;  
-	int height = src->height;
+	int width = XX - X;  
+	int height = YY - Y;
 	int widthStep = src ->widthStep;
 	//申请空间
-	int *count_x = new int[height];
-	memset(count_x,0,sizeof(int)*height);
+	int *count_x = new int[src->height];
+	memset(count_x,0,sizeof(int)*src->height);
 
 	//水平投影计数
-	for(int i =0; i<width ;i++)
+	for(int i =X; i<XX ;i++)
 	{
-		for(int j = 0 ;j<height ;j++)
+		for(int j = Y ;j<YY ;j++)
 		{
 			if((uchar)src->imageData[j*widthStep + i] == 0)
 				count_x[j]++;
@@ -498,7 +494,7 @@ struct OutLinesInfo Tools::function(IplImage *src)
 	int mark_x_count =0;
 	int flag_x=0;
 	//
-	for(int i = 0 ; i < height ;i++)
+	for(int i = Y ; i < YY ;i++)
 	{
 		//行开始该值可以修改 改行多于四个点
 		if(count_x[i] > 4 && flag_x ==0)
@@ -535,7 +531,7 @@ struct OutLinesInfo Tools::function(IplImage *src)
 	return childFunction(src,mark_x,mark_x_count);
 }
 
-IplImage* Tools::deal(CString filePath)
+IplImage* Tools::deal(CString filePath,bool isCut,int ux,int dx,int uy,int dy)
 {
 	char * filePathName;
 	int n = filePath.GetLength();
@@ -556,9 +552,23 @@ IplImage* Tools::deal(CString filePath)
 	IplImage *theld = cvCreateImage(cvSize(newSrc->width,newSrc->height),8,1);
 	OtsuTheld(edge,theld);
 
-
-	outlinesinfo = function(theld);
 	int time = src->width/newSrc->width;
+
+	if(isCut)
+	{
+		X = ux/time;
+		XX = dx/time;
+		Y = uy/time;
+		YY = dy/time;
+	}
+	else
+	{
+		X = 0;
+		XX = newSrc->width;
+		Y = 0;
+		YY = newSrc->height;
+	}
+	outlinesinfo = function(theld);
 
 	for(int i = 0 ;i < outlinesinfo.rows;i++)
 	{

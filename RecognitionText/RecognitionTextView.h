@@ -74,10 +74,12 @@ private:
 	boolean isCutted;
 	CPoint cutDownPoint;
 	CPoint cutUpPoint;
+
 	int downX;
 	int downY;
 	int upX;
 	int upY;
+
 private:
 	int m_nViewHeight;
 	int m_nVScrollPos;
