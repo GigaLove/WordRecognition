@@ -557,9 +557,9 @@ IplImage* Tools::deal(CString filePath,bool isCut,int ux,int dx,int uy,int dy)
 	if(isCut)
 	{
 		X = ux/time;
-		XX = dx/time;
+		XX = dx/time < newSrc->width ? dx/time : newSrc->width;
 		Y = uy/time;
-		YY = dy/time;
+		YY = dy/time < newSrc->height ? dy/time : newSrc->height;
 	}
 	else
 	{
