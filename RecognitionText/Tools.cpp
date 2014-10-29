@@ -20,13 +20,14 @@ int Tools::findFile(char FilePath[],char FileName[][50])
 	int FileCount=0;
 	struct _finddata_t fileinfo;
 
-	handle=_findfirst(FilePath, &fileinfo);
+	handle=_findfirst(FilePath,&fileinfo);
 	if (handle == -1)
 	{
 		MessageBox(NULL,TEXT("打开错误"),TEXT("YES"),MB_OK);
 		return -1;
 	}
 	strcpy_s(FileName[FileCount],(const char*)fileinfo.name);
+	//printf("%s\n",FileName[FileCount]);
 	FileCount ++;
 
 	while(!_findnext(handle,&fileinfo))
@@ -116,6 +117,63 @@ void Tools::getEdge(IplImage *src,IplImage *new_src)
 		}
 	}
 }
+
+//快排
+int Tools::partition(int i,int j,int temp,int *data)/*划分*/
+{
+	int L,R ;
+	L = i;
+	R = j;
+	do
+	{
+		while(L < R && data[R] > temp)
+			R--;
+
+		data[L]=data[R];
+
+		while(L < R && data[L] <= temp)
+			L++;
+
+		data[R]=data[L];
+	}while(L < R);
+
+	data[L]=temp;
+
+	return L;
+}
+
+void Tools::quicksort(int i,int j,int *data)/*快速排序*/
+{
+	int pivotindex=0,k=0;
+	int temp;
+
+	if((j-i)==1)
+	{
+		if(data[i]>data[j])//交换
+		{
+			temp=data[i];
+			data[i]=data[j];
+			data[j]=temp;
+		}
+		return;
+	}
+	else
+	{
+		if(data[i]>=data[i+1])
+			pivotindex=i;
+		else
+			pivotindex=i+1;
+
+		temp = data[pivotindex];
+		k = partition (pivotindex,j,temp,data);
+
+		if(i<k-1)
+			quicksort(i,k-1,data);
+		if(k<j)
+			quicksort(k,j,data);
+	}
+}
+
 
 int Tools::Otsu(IplImage *src)
 {
@@ -208,337 +266,229 @@ void Tools::OtsuTheld(IplImage *src,IplImage *new_src)
 	}
 }
 
-void Tools::FindOther(IplImage *src,int yy,int xx,struct OutLine outLine[],int *count)
+void Tools::FindOther(IplImage *src,int xx,int yy,struct OutLine outLine,struct OutLine *tempoutline)
 {
 	int x_x[8]={-1,0,1,-1,1,-1,0,1};
 	int y_y[8]={-1,-1,-1,0,0,1,1,1};
 
 	int x,y;
+	int xSt = outLine.xSt;
+	int xEnd = outLine.xEnd;
+	int ySt = outLine.ySt;
+	int yEnd = outLine.yEnd;
 	int widthStep = src->widthStep;
 	//八邻域进行搜索
+
 	for(int i=0;i<8;i++)
 	{
 		y=yy+ y_y[i];   //垂直方向
 		x=xx+ x_x[i];   //水平方向
 
 		//判断是否越界
-		if(y < Y + 5 || y >= YY-3 ||x < X + 5 || x >= XX - 6)
+		if(y < ySt || y >= yEnd ||x < xSt || x >= xEnd)
 			continue;
 		//递归查找
 		if(src->imageData[y*widthStep+x]==0)
 		{
 			//右
-			if(outLine[0].Right < x)
-				outLine[0].Right = x;
+			if(x < tempoutline[0].xSt)
+				tempoutline[0].xSt = x;
 			//左
-			if(outLine[0].Left > x)
-				outLine[0].Left = x;
+			if(x > tempoutline[0].xEnd)
+				tempoutline[0].xEnd  = x;
 			//上
-			if(outLine[0].Up > y)
-				outLine[0].Up = y;
+			if(y < tempoutline[0].ySt)
+				tempoutline[0].ySt = y;
 			//下
-			if(outLine[0].Down < y)
-				outLine[0].Down = y;
+			if(y > tempoutline[0].yEnd)
+				tempoutline[0].yEnd = y;
 			//标记该点 进入递归
 			src->imageData[y*widthStep+x] = 128;
-			count[0]++;
-			FindOther(src,y,x,outLine,count);
+			tempoutline[0].Code ++ ;
+			FindOther(src,x,y,outLine,tempoutline);
 		}
 	}
 }
 
-int Tools::FindST(IplImage *src,int beg, int end ,int count_y[],struct OutLine Out[])
+void Tools::GetWords(IplImage *src,struct OutLine outLine,OutLines *outlines)
 {
+	int xSt = outLine.xSt;
+	int xEnd = outLine.xEnd;
+	int ySt = outLine.ySt;
+	int yEnd = outLine.yEnd;
 	int widthStep = src->widthStep;
 
-	int count = 0;
-	int sum[1];
-	struct OutLine outLine[1];
-	//对该行进行递归查找
-	for(int i=X + 6 ; i< XX - 6 ; i++)
+	struct OutLine tempoutline;
+	for(int i = xSt;i < xEnd ;i++)
 	{
-		//判断改行是否有字点 减少计算
-		if(count_y[i] == 0)
-			continue;
-		for(int j=beg;j< end ;j++)
+		for(int j = ySt; j< yEnd ;j++)
 		{
 			if((uchar)src->imageData[j*widthStep + i] == 0)
 			{
-				//初始轮廓外围记录的点
-				outLine[0].Right = i;
-				outLine[0].Left = i;
-				outLine[0].Up = j;
-				outLine[0].Down = j;
-				//标记改点
+				tempoutline.Code = 1;
+
+				tempoutline.xSt = i;
+				tempoutline.xEnd = i;
+				tempoutline.ySt = j;
+				tempoutline.yEnd = j;
+
 				src->imageData[j*widthStep + i] = 128;
-				//进入递归函数
-				sum[0] = 1;
-				FindOther(src,j,i,outLine,sum);
+				FindOther(src,i,j,outLine,&tempoutline);
 
-				//printf("%d\t",sum[0]);
-				if(sum[0]<5)
-					continue;
-
-				//获取轮廓查找结果
-				Out[count].Up = outLine[0].Up;
-				Out[count].Down = outLine[0].Down;
-				Out[count].Left = outLine[0].Left;
-				Out[count].Right = outLine[0].Right;
-				Out[count].code = 1;//标志状态 在融合计算使用
-				count++;//计数
+				if(tempoutline.Code >= 5)
+					outlines->push_back(tempoutline);
 			}
 		}
 	}
-
-	return count;
 }
 
-int Tools::compute(int x1,int y1,int x2,int y2)
+void Tools::SetInOrder(OutLines outlines,OutLineSs *outLineSs,Lines *lines)
 {
-	//计算两点距离
-	return int(sqrt(double(y2-y1)*(y2-y1) + (x2-x1)*(x2-x1)));
-}
+	int line;
+	int Dis;
+	int wordline;
 
-void Tools::doOutLine(int count,struct OutLine Out[])
-{
-	int dist;
-	int st;
-	int num;
-	int ST;
-	int flag;
-	do{
-		//该值可以从设 这里表示进行两轮融合计算 
-		flag = 1;
-		for(int i = 0; i < count ;i++)
+	//数据进行分行
+	for(int i = 0;i< outlines.size();i++)
+	{
+		Dis = 1000;
+		//计算该值得几何中心
+		wordline = (outlines[i].ySt + outlines[i].yEnd)/2;
+
+		//和所有行计算距离
+		for(int j = 0;j< lines->size();j++)
 		{
-			//检测状态 判断是否被其他轮廓融合了
-			if(Out[i].code == 0)
-				continue;
-			//获取轮廓较长的边
-			ST = (Out[i].Down - Out[i].Up) > (Out[i].Right - Out[i].Left)?(Out[i].Down - Out[i].Up) : (Out[i].Right - Out[i].Left);
-			//取与后方num个轮廓进行融合计算 该值可以修改
-			num = (i+7) < count ? (i+7):count;
-			//
-			for(int j = i+1 ;j<  num;j ++)
+			if(abs(wordline - (*lines)[j]) < Dis)
 			{
-				//检测状态 判断是否被其他轮廓融合了
-				if(Out[j].code == 0)
-					continue;
-				//获取轮廓较长的边
-				st = (Out[j].Right - Out[j].Left) > (Out[j].Down - Out[j].Up) ? (Out[j].Right - Out[j].Left) : (Out[j].Down - Out[j].Up);
-				//取较小值作为阈值
-				st = st < ST ? st : ST;
+				line = j;
+				Dis = abs(wordline - (*lines)[j]);
+			}
+		}
+		outlines[i].Line = line;
+	}
 
-				//位置关系 无重叠
-				//上方
-				if(Out[i].Up >= Out[j].Down)
+
+	bool st;
+	int temp;
+	int tempCode;
+	int tempLeft;
+	int Threld = 10;
+	int Code = 0;
+	OutLines tempouelines;
+
+	for(int i = 0;i<lines->size();i++)
+	{
+		tempLeft = 0;
+		while(1)
+		{
+			st = true;
+			temp = 3000;
+
+			for(int j=0; j<outlines.size(); j++)
+			{
+				if(outlines[j].Line == i)
 				{
-					//正上方
-					if(Out[i].Right >= Out[j].Left )
-						dist = Out[i].Up - Out[j].Down;
-					//右上方
-					else if(Out[i].Right < Out[j].Left )
-						dist = compute(Out[i].Up,Out[i].Right,Out[j].Down,Out[j].Left);
+					if(outlines[j].xSt >= tempLeft && outlines[j].xSt < temp)
+					{
+						tempCode = j;
+						temp = outlines[j].xSt;
+						st =false;
+					}
 				}
-				//下方
-				else if(Out[i].Down <= Out[j].Up)
-				{
-					//正下方
-					if(Out[i].Right >= Out[j].Left )
-						dist = Out[j].Up - Out[i].Down;
-					//右下方
-					else if(Out[i].Right < Out[j].Left)
-						dist = compute(Out[i].Down,Out[i].Right,Out[j].Up,Out[j].Left);
+			}
 
-				}
-				//正右方
-				else if(Out[i].Right <= Out[j].Left)
-					dist = Out[j].Left  - Out[i].Right;
-				//其他情况 既是可以融合两个轮廓
-				else 
-					dist = 0;
-
-				//与阈值比较 2的值可以更改
-				if(dist > st*2)
-						continue;
-				//进行轮廓融合
-				Out[i].Up = Out[i].Up < Out[j].Up ? Out[i].Up : Out[j].Up;
-
-				Out[i].Down = Out[i].Down > Out[j].Down ? Out[i].Down : Out[j].Down;
-
-				Out[i].Left = Out[i].Left < Out[j].Left ? Out[i].Left : Out[j].Left;
-
-				Out[i].Right = Out[i].Right > Out[j].Right ? Out[i].Right : Out[j].Right;
-
-				Out[j].code = 0;
-
-				//退出内循环
-				i--;
+			//printf("%d\t%d\t%d\n",tempLeft,tempCode,temp);
+			if(st)
+			{
+				outLineSs->push_back(tempouelines);
+				tempouelines.clear();
 				break;
 			}
-		}
 
-		flag--;
-	}while(flag > 0);
-}
-
-struct OutLinesInfo Tools::childFunction(IplImage *src,int Xline[],int count_x)
-{
-	int width = XX - X;
-	int height = YY - Y;
-	int widthStep = src ->widthStep;
-	//初始化查找的结构体
-	int *count_y = new int[width];
-	int count = 0;
-	int column;
-	int Num;
-	struct OutLine outline[60];
-
-	//初始化储存结构体
-	struct OutLinesInfo outlinesinfo;
-	outlinesinfo.rows = count_x/2;
-	outlinesinfo.BegEnd = new int[count_x];
-	outlinesinfo.columns = new int[count_x/2];
-	outlinesinfo.outlines = (struct OutLine**)malloc(sizeof(struct OutLine*)*(count_x/2));
-
-#pragma omp parallel num_threads(4)
-	{
-#pragma omp for private(count_y,column,Num,outline,count)
-		for(int k = 0; k < count_x ;k+=2)
-		{
-			//记录改行的开始
-			outlinesinfo.BegEnd[k] = Xline[k];
-			outlinesinfo.BegEnd[k+1] = Xline[k+1];
-			//初始值
-			memset(count_y,0,sizeof(int)*width);
-			//进行该字行的垂直投影统计
-			for(int i=X;i<XX;i++)
+			//进行操作
+			if(tempouelines.size() == 0)
 			{
-				for(int j = Xline[k] ; j< Xline[k+1] ;j++)
-				{
-					if(src->imageData[j * widthStep +i] == 0)
-						count_y[i]++;
-				}
+				outlines[tempCode].Line = -1;
+				outlines[tempCode].Code = Code;
+				tempLeft = outlines[tempCode].xSt;
+				tempouelines.push_back(outlines[tempCode]);
+				Code ++;
 			}
-			//获取检测阈值 即超过改行高度0.15的列数 该值可以修改
-			int Min = (Xline[k+1] - Xline[k]) * 0.15;
-			//初始化
-			Num =0;
-			//记录超过阈值的数目
-			for(int i = X ; i < XX ;i++)
-			{
-				if(count_y[i] > Min)
-					Num++;
-			}
-			//如果数目太少
-			if(Num < width * 0.03)
-			{
-				outlinesinfo.outlines[k/2] = NULL;
-				outlinesinfo.columns[k/2] = -1;
-				continue;
-			}
-			//否则调用函数查找改行所有轮廓
-			Num = FindST(src,Xline[k],Xline[k+1],count_y,outline);
-
-			//调用该函数对改行的轮廓进行融合计算
-			doOutLine(Num,outline);
-			//将融合就得结果放入数组储存
-			outlinesinfo.outlines[k/2] = (struct OutLine *)malloc(sizeof(struct OutLine)*(Num+2));
-
-			column = 0;
-			for(int i = 0;i< Num;i++)
-			{
-				//将结果为1的轮廓记录
-				if(outline[i].code == 1)
-				{
-					//对于过小的点进行去除 该阈值可以重新计算得到新值
-					if((outline[i].Right-outline[i].Left+1)*(outline[i].Down - outline[i].Up+1) < 8)
-						continue;
-					//其他的进行拷贝
-					outlinesinfo.outlines[k/2][column].Up = outline[i].Up;
-					outlinesinfo.outlines[k/2][column].Down = outline[i].Down;
-					outlinesinfo.outlines[k/2][column].Left = outline[i].Left;
-					outlinesinfo.outlines[k/2][column].Right = outline[i].Right;
-					outlinesinfo.outlines[k/2][column].code = column;
-					column++;
-				}
-			}
-			//将结果写入结构体
-			outlinesinfo.columns[k/2] = column;
-		}
-	}
-	return outlinesinfo;
-}
-
-struct OutLinesInfo Tools::function(IplImage *src)
-{
-	int width = XX - X;  
-	int height = YY - Y;
-	int widthStep = src ->widthStep;
-	//申请空间
-	int *count_x = new int[src->height];
-	memset(count_x,0,sizeof(int)*src->height);
-
-	//水平投影计数
-	for(int i =X; i<XX ;i++)
-	{
-		for(int j = Y ;j<YY ;j++)
-		{
-			if((uchar)src->imageData[j*widthStep + i] == 0)
-				count_x[j]++;
-		}
-	}
-
-	//记录各行的开始
-	int mark_x[60];
-	int mark_x_count =0;
-	int flag_x=0;
-	//
-	for(int i = Y ; i < YY ;i++)
-	{
-		//行开始该值可以修改 改行多于四个点
-		if(count_x[i] > 4 && flag_x ==0)
-		{
-			//判断该行开始与上一行结束的距离 否则融合两行 如果两行距离小于十
-			if(mark_x_count==0||i - mark_x[mark_x_count-1] >10)
-			{
-				mark_x[mark_x_count] = i-2;
-				flag_x = 1;
-				mark_x_count++;
-			}
+			//否则判断是否融合
 			else
 			{
-				flag_x = 1;
-				mark_x_count--;
+				outlines[tempCode].Line = -1;
+				outlines[tempCode].Code = Code;
+
+				//printf("%d\t%d\n",tempouelines[tempouelines.size() -1].xEnd,outlines[tempCode].xSt - Threld);
+				//融合
+				if(tempouelines[tempouelines.size() -1].xEnd >= outlines[tempCode].xSt - Threld)
+				{
+					tempouelines[tempouelines.size() -1].xEnd = tempouelines[tempouelines.size()-1].xEnd > outlines[tempCode].xEnd 
+						?  tempouelines[tempouelines.size()-1].xEnd : outlines[tempCode].xEnd;
+
+					tempouelines[tempouelines.size() -1].ySt = tempouelines[tempouelines.size()-1].ySt < outlines[tempCode].ySt 
+						?  tempouelines[tempouelines.size()-1].ySt : outlines[tempCode].ySt;
+
+					tempouelines[tempouelines.size() -1].yEnd = tempouelines[tempouelines.size()-1].yEnd > outlines[tempCode].yEnd 
+						?  tempouelines[tempouelines.size()-1].yEnd : outlines[tempCode].yEnd;
+				}
+
+				else
+				{
+					tempLeft = outlines[tempCode].xSt;
+					tempouelines.push_back(outlines[tempCode]);
+					Code ++;
+				}
 			}
 		}
-		//行结束 行结束的判断条件 3 该值可以修改
-		else if(count_x[i] < 3 && flag_x ==1)
+
+		/*for(int j = 0;j< outLineSs->at(i).size(); j++)
 		{
-			//判断行结束和开始的距离 否则去掉 该值可以修改
-			if(i-mark_x[mark_x_count-1] > 15)
-			{
-				mark_x[mark_x_count] = i+2;
-				flag_x = 0;
-				mark_x_count++;
-			}
-			else
-			{
-				flag_x = 0;mark_x_count--;
-			}
+			printf("%d\n",outLineSs->at(i).at(j).Code);
+		}*/
+	}
+}
+//现在X方向进行融合 然后再X方向进行分组
+//猜测每一行之间的间隔大约在十 到儿子
+void Tools::GetLines(int *xValue,int Num,Lines *lines)
+{
+	int Sum = xValue[0];
+	int Count = 1;
+
+	for(int i = 1;i < Num;i++)
+	{
+		if(xValue[i] - xValue[i-1] < 18)
+		{
+			Sum += xValue[i];
+			Count ++;
+		}
+
+		else
+		{
+			Sum = Sum/Count;
+			lines->push_back(Sum);
+
+			Sum = xValue[i];
+			Count = 1;
+		}
+
+		if(i == Num -1)
+		{
+			Sum = Sum/Count;
+			lines->push_back(Sum);
 		}
 	}
-	return childFunction(src,mark_x,mark_x_count);
 }
-
-IplImage* Tools::deal(CString filePath,bool isCut,int ux,int dx,int uy,int dy)
+int Tools::deal(CString filePath,IplImage *src,OutLineSs *outlineSs,Lines *lines,struct OutLine outLine)
 {
+
 	char * filePathName;
 	int n = filePath.GetLength();
 	USES_CONVERSION;
 	filePathName = T2A(filePath);
 
-	IplImage *src = cvLoadImage(filePathName,0);
+	src = cvLoadImage(filePathName,0);
 
 	//降采样
 	IplImage * newSrc = pyrDown(src);
@@ -548,47 +498,46 @@ IplImage* Tools::deal(CString filePath,bool isCut,int ux,int dx,int uy,int dy)
 	getEdge(newSrc,edge);
 
 	//二值化
-	cvSmooth(edge,edge);
-	IplImage *theld = cvCreateImage(cvSize(newSrc->width,newSrc->height),8,1);
-	OtsuTheld(edge,theld);
+	//cvSmooth(edge,edge);
+	IplImage *threld = cvCreateImage(cvSize(newSrc->width,newSrc->height),8,1);
+	OtsuTheld(edge,threld);
+
+	//储存初次获得的轮廓
+	OutLines outLines;
+	GetWords(threld,outLine,&outLines);
+	//获取y方向的分布值
+	int *xValue = new int[outLines.size()];
+	for(int i = 0;i < outLines.size();i++)
+	{
+		//printf("%d\t%d\t%d\t%d\n",outLines[i].xEnd,outLines[i].xSt,outLines[i].ySt,outLines[i].yEnd);
+		xValue[i] = (outLines[i].ySt + outLines[i].yEnd)/2;
+	}
+	quicksort(0,outLines.size()-1,xValue);
+
+	//获得行数
+	GetLines(xValue,outLines.size(),lines);
+	//获得排序的结果
+	SetInOrder(outLines,outlineSs,lines);
 
 	int time = src->width/newSrc->width;
-
-	if(isCut)
+	for(int i = 0; i<outlineSs->size();i++)
 	{
-		X = ux/time;
-		XX = dx/time < newSrc->width ? dx/time : newSrc->width;
-		Y = uy/time;
-		YY = dy/time < newSrc->height ? dy/time : newSrc->height;
-	}
-	else
-	{
-		X = 0;
-		XX = newSrc->width;
-		Y = 0;
-		YY = newSrc->height;
-	}
-	outlinesinfo = function(theld);
-
-	for(int i = 0 ;i < outlinesinfo.rows;i++)
-	{
-		if(outlinesinfo.columns[i] < 0 )
-			continue;
-
-		for(int j = 0;j < outlinesinfo.columns[i];j++)
+		for(int j = 0; j<outlineSs->at(i).size();j++)
 		{
-			outlinesinfo.outlines[i][j].Up = outlinesinfo.outlines[i][j].Up*time;
-			outlinesinfo.outlines[i][j].Down = outlinesinfo.outlines[i][j].Down*time;
-			outlinesinfo.outlines[i][j].Left = outlinesinfo.outlines[i][j].Left*time;
-			outlinesinfo.outlines[i][j].Right = outlinesinfo.outlines[i][j].Right*time;
+			outlineSs->at(i).at(j).xSt = outlineSs->at(i).at(j).xSt*time;
+			outlineSs->at(i).at(j).xEnd = outlineSs->at(i).at(j).xEnd*time;
+			outlineSs->at(i).at(j).ySt = outlineSs->at(i).at(j).ySt*time;
+			outlineSs->at(i).at(j).yEnd = outlineSs->at(i).at(j).yEnd*time;
 		}
+		lines->at(i) = lines->at(i)*time;
 	}
 
+	outLines.clear();
 	cvReleaseImage(&newSrc);
 	cvReleaseImage(&edge);
-	cvReleaseImage(&theld);
+	cvReleaseImage(&threld);
 
-	return src;
+	return 1;
 }
 
 

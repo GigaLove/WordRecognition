@@ -33,7 +33,6 @@ IMPLEMENT_DYNCREATE(CRecognitionTextView, CScrollView)
 		ON_COMMAND(ID_Load_Image, &CRecognitionTextView::OnLoadImage)
 		ON_COMMAND(ID_Previous_Page, &CRecognitionTextView::OnPreviousPage)
 		ON_COMMAND(ID_Next_Page, &CRecognitionTextView::OnNextPage)
-		ON_COMMAND(ID_Delete_Page, &CRecognitionTextView::OnDeletePage)
 		ON_WM_LBUTTONDOWN()
 		ON_WM_LBUTTONUP()
 		ON_COMMAND(ID_Add, &CRecognitionTextView::OnAdd)
@@ -63,6 +62,7 @@ IMPLEMENT_DYNCREATE(CRecognitionTextView, CScrollView)
 		downY = 0;
 		upX = 0;
 		upY = 0;
+
 		for (int i=0; i<7536; i++)
 		{
 			for (int j=0;j<3;j++)
@@ -74,7 +74,6 @@ IMPLEMENT_DYNCREATE(CRecognitionTextView, CScrollView)
 
 	void CRecognitionTextView::initData()
 	{
-		tools.outlinesinfo.rows = -1;
 		index = 0;
 		fileCount = 0;
 		rIndex = 0;
@@ -247,7 +246,6 @@ IMPLEMENT_DYNCREATE(CRecognitionTextView, CScrollView)
 				isSized = true;
 			}
 			drawRectangle(0, m_nVScrollPos);
-			drawCharacter(0, m_nVScrollPos);
 		}
 
 	}
@@ -289,20 +287,9 @@ IMPLEMENT_DYNCREATE(CRecognitionTextView, CScrollView)
 		{
 			if(index > 0)			//当前图片下标有效
 			{
-				if(tools.outlinesinfo.rows >-1)		//判断当前图片是否处理过，处理过的话为true
-				{
-					clearMem();			//清空结构体指针
-				}
 				int tempIndex = index;
 				index -= 1;
 
-				for (int i = rIndex-1;i>=0;i--)		//过滤删除页数的index
-				{
-					if(index == removeList[i])
-					{
-						index--;
-					}
-				}
 				if (index < 0)
 				{
 					index = tempIndex;
@@ -312,6 +299,7 @@ IMPLEMENT_DYNCREATE(CRecognitionTextView, CScrollView)
 				filePath = fileDictionary + (CString)fileName[index];
 				//加载图片
 				clsCutInfo();
+				clearMem();
 				OnPaint();
 			}
 			else{
@@ -331,18 +319,13 @@ IMPLEMENT_DYNCREATE(CRecognitionTextView, CScrollView)
 		{
 			if(index < fileCount-1)
 			{
-				if(tools.outlinesinfo.rows >-1)		//判断当前图片是否处理过，处理过的话为true
-				{
-					clearMem();			//清空结构体指针
-				}
+				//if(tools.outlinesinfo.rows >-1)		//判断当前图片是否处理过，处理过的话为true
+				//{
+				//	clearMem();			//清空结构体指针
+				//}
 				int tempIndex = index;
 				index += 1;
-				for (int i=0;i<rIndex;i++)					//过滤删除页数的index
-				{    
-					if(index == removeList[i]){
-						index++;
-					}
-				}
+
 				if (index >= fileCount)
 				{
 					index = tempIndex;
@@ -352,6 +335,7 @@ IMPLEMENT_DYNCREATE(CRecognitionTextView, CScrollView)
 				filePath = fileDictionary + (CString)fileName[index];
 				//加载图片
 				clsCutInfo();
+				clearMem();
 				OnPaint();
 			}
 			else{
@@ -365,44 +349,14 @@ IMPLEMENT_DYNCREATE(CRecognitionTextView, CScrollView)
 	//清空结构体指针
 	void CRecognitionTextView::clearMem()
 	{
-		//释放结构体指针
-		for(int i = 0 ;i < tools.outlinesinfo.rows;i++)
+		if(outlineSs.size() != 0)
 		{
-			if(tools.outlinesinfo.outlines[i] != NULL)
-			{	
-				free(tools.outlinesinfo.outlines[i]);		//释放行指针
-				tools.outlinesinfo.outlines[i] = NULL;
-			}
+			for(int i = 0;i<outlineSs.size();i++)
+				outlineSs[i].clear();
+
+			outlineSs.clear();
+			lines.clear();
 		}
-
-		free(tools.outlinesinfo.columns);
-		free(tools.outlinesinfo.BegEnd);
-		free(tools.outlinesinfo.outlines);
-
-		tools.outlinesinfo.rows = -1;
-		tools.outlinesinfo.BegEnd = NULL;
-		tools.outlinesinfo.columns = NULL;
-		tools.outlinesinfo.outlines = NULL;
-	}
-
-	//删除页数处理函数
-	void CRecognitionTextView::OnDeletePage()
-	{
-		// TODO: 在此添加命令处理程序代码
-		if (fileCount > 0)
-		{
-			removeList[rIndex] = index;			//将当前图片的index添加到移除列表
-			rIndex ++;
-			if(index < fileCount - 1){
-				OnNextPage();
-			} else {
-				OnPreviousPage();	
-			}
-		} else {
-			MessageBox(TEXT("请先加载图片"));
-		}
-		//释放空间
-		cvReleaseImage(&src);
 	}
 
 	//鼠标左键按下处理函数
@@ -410,8 +364,8 @@ IMPLEMENT_DYNCREATE(CRecognitionTextView, CScrollView)
 	{
 		// TODO: 在此添加消息处理程序代码和/或调用默认值
 		downPoint = point;
-		downX = (point.x - xSt) * resizeX;
-		downY = (point.y + m_nVScrollPos) * resizeY;
+		outline.xSt = (point.x - xSt) * resizeX;
+		outline.ySt = (point.y + m_nVScrollPos) * resizeY;
 		isCutted = false;
 		CScrollView::OnLButtonDown(nFlags, point);
 
@@ -422,172 +376,205 @@ IMPLEMENT_DYNCREATE(CRecognitionTextView, CScrollView)
 	{
 		// TODO: 在此添加消息处理程序代码和/或调用默认值
 		upPoint = point;
-		upX = (point.x - xSt) * resizeX;
-		upY = (point.y  + m_nVScrollPos)*resizeY;
+		outline.xEnd = (point.x - xSt) * resizeX;
+		outline.yEnd = (point.y  + m_nVScrollPos)*resizeY;
 		CScrollView::OnLButtonUp(nFlags, point);
 	}
 
 	//添加矩形处理函数
 	void CRecognitionTextView::OnAdd()
 	{
-		int k = -1;
-		int distance = 1000;
 		//获取实际位置
 		int up = int((downPoint.y+m_nVScrollPos) * resizeY);
 		int down = int((upPoint.y+m_nVScrollPos) * resizeY);
 		int left = int(downPoint.x - xSt)* resizeX;
 		int right = int(upPoint.x- xSt) * resizeX;
 
-		//判断在哪一行
-		for(int i = 0; i < tools.outlinesinfo.rows;i++)
-		{
-			if(tools.outlinesinfo.columns[i] == -1)
-				continue;
-			if(abs(up - tools.outlinesinfo.BegEnd[i*2])+abs(down - tools.outlinesinfo.BegEnd[i*2 + 1]) < distance)
-			{
-				distance = abs(up - tools.outlinesinfo.BegEnd[i*2])+abs(down - tools.outlinesinfo.BegEnd[i*2 + 1]);
-				k = i;
-			}
-		}
+		int new_width = right - left;
+		int new_height = down - up;
 
-		if (k >= 0)
-		{
-			tools.outlinesinfo.outlines[k][tools.outlinesinfo.columns[k]].Up = up;
-			tools.outlinesinfo.outlines[k][tools.outlinesinfo.columns[k]].Down = down;
-			tools.outlinesinfo.outlines[k][tools.outlinesinfo.columns[k]].Left = left;
-			tools.outlinesinfo.outlines[k][tools.outlinesinfo.columns[k]].Right = right;
+		//获取位置然后获取该区域
+		CvMat* submat = new CvMat;
 
-			//判断处于第几个位置
-			int code = -1;
-			for(int i = 0; i<tools.outlinesinfo.columns[k];i++)
+		IplImage *newSrc = cvCreateImageHeader(cvSize(new_width,new_height),8,1);
+
+		CvRect rect = cvRect(left,up,new_width,new_height);
+
+		cvGetSubRect(src,submat,rect);
+
+		cvGetImage(submat,newSrc);
+
+		//获取边缘
+		IplImage *edge = cvCreateImage(cvSize(new_width,new_height),8,1);
+		tools.getEdge(newSrc,edge);
+		//二值化
+		IplImage *throld = cvCreateImage(cvSize(new_width,new_height),8,1);
+		tools.OtsuTheld(edge,throld);
+
+		int xst = new_width,xen = 0;
+		int yst = new_height,yen = 0;
+
+		for(int i=0 ;i<new_width ;i++)
+		{
+			for(int j = 0;j<new_height;j++)
 			{
-				//将大于它的位置 往后移一个
-				if(left < tools.outlinesinfo.outlines[k][i].Left)
+				if(throld->imageData[j*src->widthStep + i] == 0)
 				{
-					if(tools.outlinesinfo.outlines[k][i].code != -1)
-						tools.outlinesinfo.outlines[k][i].code ++;
+					if(i<xst)
+						xst = i;
 
-					if(code != -1)
-						code  = i;
+					else if(i>yen)
+						yen = i;
+
+					if(j<yst)
+						yst = j;
+
+					else if(j>yen)
+						yen = j;
 				}
 			}
-
-			tools.outlinesinfo.outlines[k][tools.outlinesinfo.columns[k]].code = code;
-			tools.outlinesinfo.columns[k] ++;
-
-			//drawRectangle(0, m_nVScrollPos);
-			OnPaint();
 		}
+
+		struct OutLine tempoutline;
+		tempoutline.xSt = xst + left;
+		tempoutline.xEnd = xen + left;
+		tempoutline.ySt = yst + up;
+		tempoutline.yEnd = yen + up;
+		//判断在哪一行
+		int cent = (yst + yen)/2 + up;
+		int temp = 1000;
+		int mark;
+		for(int i = 0;i<lines.size();i++)
+		{
+			if(abs(cent - lines[i]) < temp)
+			{
+				temp = abs(cent - lines[i]);
+				mark = i;
+			}
+		}
+
+		//插入改行
+		bool st = false;
+		for(int i = mark;i < outlineSs.size();i++)
+		{
+			for(int j = 0; j< outlineSs.at(i).size();j++)
+			{
+				if(outlineSs.at(i).at(j).Code == -1)
+					continue;
+
+				if(!st)
+				{
+					if(outlineSs.at(i).at(j).xSt > tempoutline.xSt)
+					{
+						tempoutline.Code = outlineSs.at(i).at(j).Code;
+						outlineSs.at(i).at(j).Code ++;
+						//插入该元素
+						outlineSs.at(i).insert(outlineSs.at(i).begin()+j,tempoutline);
+						st = true;
+					}
+				}
+				else
+				{
+					outlineSs.at(i).at(j).Code++;
+				}
+			}
+		}
+
+
+		cvReleaseImage(&edge);
+		cvReleaseImage(&throld);
+
+		OnPaint();
 	}
 
 	//删除矩形处理函数
 	void CRecognitionTextView::OnDelete()
 	{
-		// TODO: 在此添加命令处理程序代码
-		for(int i=0; i< tools.outlinesinfo.rows; i++)
+		/*int up = int((downPoint.y+m_nVScrollPos) * resizeY);
+		int down = int((upPoint.y+m_nVScrollPos) * resizeY);
+		int left = int(downPoint.x - xSt)* resizeX;
+		int right = int(upPoint.x- xSt) * resizeX;*/
+		int pt_x = int(downPoint.x - xSt)* resizeX;
+		int pt_y = int((downPoint.y+m_nVScrollPos) * resizeY);
+		//// TODO: 在此添加命令处理程序代码
+		bool st = false;
+		for(int i=0; i< outlineSs.size(); i++)
 		{
-			if(tools.outlinesinfo.columns[i]==-1)
-				continue;
-
-			for(int j = 0; j< tools.outlinesinfo.columns[i] ;j++)
+			for(int j = 0; j< outlineSs.at(i).size();j++)
 			{
-				if ((downPoint.x- xSt)*resizeX < tools.outlinesinfo.outlines[i][j].Left
-					&& (downPoint.y+m_nVScrollPos)*resizeY < tools.outlinesinfo.outlines[i][j].Up 
-					&& (upPoint.x- xSt)*resizeX > tools.outlinesinfo.outlines[i][j].Right
-					&& (upPoint.y+m_nVScrollPos)*resizeY > tools.outlinesinfo.outlines[i][j].Down)
-				{
-					tools.outlinesinfo.outlines[i][j].code = -1;
-				}
-			}
-		}
+				if(outlineSs.at(i).at(j).Code == -1)
+					continue;
 
-		//加载图片
-		//hBitmap=(HBITMAP)LoadImage(NULL,filePath,IMAGE_BITMAP,0,0,LR_CREATEDIBSECTION|LR_DEFAULTSIZE|LR_LOADFROMFILE);
+				if(!st)
+				{
+					if(pt_x > outlineSs.at(i).at(j).xSt
+						&& pt_x < outlineSs.at(i).at(j).xEnd
+						&& pt_y > outlineSs.at(i).at(j).ySt
+						&& pt_y < outlineSs.at(i).at(j).yEnd)
+					{
+						outlineSs.at(i).at(j).Code = -1;
+					}
+				}
+				else
+				{
+					outlineSs.at(i).at(j).Code --;
+				}
+
+			}
+		 }
 		OnPaint();
-		//drawRectangle(0, m_nVScrollPos);
 	}
 
 	//绘制矩形处理函数
 	void CRecognitionTextView::drawRectangle(int move_x, int move_y)
 	{
-		CClientDC dc(this);				//获取客户区环境
+		CClientDC dc(this);
 		CBrush *pBrush=CBrush::FromHandle((HBRUSH)
 			GetStockObject(NULL_BRUSH));
 
 		CBrush *pOldBrush=dc.SelectObject(pBrush);
 
-		for(int i=0; i< tools.outlinesinfo.rows; i++)
+		if(outlineSs.size() > 0)
 		{
-			if(tools.outlinesinfo.columns[i]==-1)
-				continue;
-
-			for(int j = 0; j< tools.outlinesinfo.columns[i] ;j++)
+			for(int i=0; i< outlineSs.size(); i++)
 			{
-				if (tools.outlinesinfo.outlines[i][j].code >= 0)
+				for(int j = 0; j< outlineSs.at(i).size();j++)
 				{
-					dc.Rectangle(CRect(CPoint(int(tools.outlinesinfo.outlines[i][j].Left/resizeX - move_x)+xSt, int(tools.outlinesinfo.outlines[i][j].Up/resizeY - move_y)), CPoint(int(tools.outlinesinfo.outlines[i][j].Right/resizeX - move_x)+xSt, int(tools.outlinesinfo.outlines[i][j].Down/resizeY - move_y))));
+					if(outlineSs.at(i).at(j).Code == -1)
+						continue;
+
+					dc.Rectangle(CRect(CPoint(int(outlineSs.at(i).at(j).xSt/resizeX - move_x)+xSt, int(outlineSs.at(i).at(j).ySt/resizeY - move_y)),CPoint(int(outlineSs.at(i).at(j).xEnd/resizeX - move_x)+xSt, int(outlineSs.at(i).at(j).yEnd/resizeY - move_y))));
+					dc.TextOutW(int(outlineSs.at(i).at(j).xEnd/resizeX - move_x)+xSt + 10,int(outlineSs.at(i).at(j).ySt/resizeY - move_y) , CString(words[index*150+outlineSs.at(i).at(j).Code]));
+
+					char num[5];
+
+					_itoa(outlineSs.at(i).at(j).Code,num,10);
+					dc.TextOutW(int(outlineSs.at(i).at(j).xSt/resizeX - move_x)+xSt,int(outlineSs.at(i).at(j).yEnd/resizeY - move_y) + 10, CString(num));
 				}
 			}
 		}
 	}
-
-	//画字符 就是按顺序花字符 可能有错
-	void CRecognitionTextView::drawCharacter(int move_x, int move_y)
-	{
-		CClientDC dc(this);
-		int ST = index;
-		int l = 0;
-		int m = 0;
-		int number  = 0;
-		//进入行循环
-		for(int i = 0;i < tools.outlinesinfo.rows;i++)
-		{
-			if(tools.outlinesinfo.columns[i]<0)
-				continue;
-			//进入列循环 画字
-			l = 0;
-			for(int j = 0;j < tools.outlinesinfo.columns[i]; j++)
-			{
-				//判断第 j个字是什么
-				for(int k = 0; k < tools.outlinesinfo.columns[i];k++)
-				{
-					if(j == tools.outlinesinfo.outlines[i][k].code )
-					{
-						dc.TextOutW(int(tools.outlinesinfo.outlines[i][k].Right/resizeX - move_x)+xSt +20, tools.outlinesinfo.outlines[i][k].Up/resizeY - move_y, CString(words[ST*150+m*10+l]));
-						//在下方画出序号
-						char num[5];
-						_itoa(number,num,10);
-						dc.TextOutW(int(tools.outlinesinfo.outlines[i][k].Left/resizeX - move_x)+xSt, tools.outlinesinfo.outlines[i][k].Down/resizeY - move_y + 20 , CString(num));
-						//计算该字的总序号
-						tools.outlinesinfo.outlines[i][k].No = number + ST*150;
-						number ++;
-						l++;
-					}
-				}
-			}
-			m++;
-		}
-	} 
 
 
 	//处理图片的事件处理函数
 	void CRecognitionTextView::OnDeal()
 	{
 		// TODO: 在此添加命令处理程序代码
+		if(!isCutted)
+		{
+			outline.xSt = 5;
+			outline.xEnd = srcWidth - 5;
+			outline.ySt = 5;
+			outline.yEnd = srcHeight - 5;
+		}
 		if(filePath !="")
 		{
-			src = tools.deal(filePath,isCutted,downX,upX,downY,upY);
-			if (src == NULL)
+			if (tools.deal(filePath,src,&outlineSs,&lines,outline) == -1)
 				MessageBox(TEXT("加载失败！"));
 			else
 			{
+				Invalidate();
 				drawRectangle(0, m_nVScrollPos);
-				if (words[0][0] != '\0')
-				{
-					drawCharacter(0, m_nVScrollPos);
-				} else {
-					MessageBox(_T("请先加载文字"));
-				}
 				OnPaint();
 			}
 		}
@@ -710,60 +697,50 @@ IMPLEMENT_DYNCREATE(CRecognitionTextView, CScrollView)
 	//用来储存结果 一类字一个文件  一共就有7千多个文件
 	void CRecognitionTextView::OnSavewords()
 	{
-		CvMat* submat;
-		IplImage *header;
-		IplImage * newsrc;
 		//按顺序储存 一张图的字 
 		//建立7356个文件夹 每一储存一类文件图片
-		for(int i = 0;i < tools.outlinesinfo.rows;i++)
+		for(int i=0; i< outlineSs.size(); i++)
 		{
-			if(tools.outlinesinfo.columns[i]<0)
-				continue;
-			//进入列循环 画字
-			for(int j = 0;j < tools.outlinesinfo.columns[i]; j++)
+			for(int j = 0; j< outlineSs.at(i).size();j++)
 			{
+				if(outlineSs.at(i).at(j).Code == -1)
+					continue;
 				//判断第 j个字是什么
-				if(tools.outlinesinfo.outlines[i][j].code >= 0)
+				int new_width = outlineSs.at(i).at(j).xEnd - outlineSs.at(i).at(j).xSt +1;
+				int new_height = outlineSs.at(i).at(j).yEnd - outlineSs.at(i).at(j).ySt + 1;
+				CvMat* submat = new CvMat;
+				IplImage *newsrc = cvCreateImageHeader(cvSize(new_width,new_height),8,1);
+
+				CvRect rect = cvRect(outlineSs.at(i).at(j).xSt, outlineSs.at(i).at(j).ySt,new_width,new_height);
+
+				cvGetSubRect(src,submat,rect);
+
+				cvGetImage(submat,newsrc);
+				//产生该字的文件名
+				char file[30] = "F:\\RS\\";
+				char num[6];
+				_itoa(outlineSs.at(i).at(j).Code + index*150,num,10);//计算其序数
+				strcat(file,num);
+				//判断文件夹是否存在
+				if(!_access(file,0))
+					_mkdir(file);
+				//产生随机数 生成该字的名 随机命名
+				srand((unsigned)time(NULL));
+				char filefullname[30];
+				do
 				{
-					int new_width = tools.outlinesinfo.outlines[i][j].Right - tools.outlinesinfo.outlines[i][j].Left;
-					int new_height = tools.outlinesinfo.outlines[i][j].Down - tools.outlinesinfo.outlines[i][j].Up;
+					_itoa(rand()/65356,num,10);
+					strcpy(filefullname,file);
+					strcat(filefullname,"\\");
+					strcat(filefullname,num);
+					strcat(filefullname,".bmp");
+				}while(_access(filefullname,0));
 
-					submat = new CvMat();
-					header = cvCreateImageHeader(cvSize(new_width,new_height),8,1);
-
-					CvRect rect = cvRect(tools.outlinesinfo.outlines[i][j].Left, tools.outlinesinfo.outlines[i][j].Up,new_width,new_height);
-
-					cvGetSubRect(src,submat,rect);
-
-					newsrc = cvGetImage(submat,header);
-					//产生该字的文件名
-					char file[30] = "F:\\RS\\";
-					char num[6];
-					_itoa(tools.outlinesinfo.outlines[i][j].No,num,10);//计算其序数
-					strcat(file,num);
-					//判断文件夹是否存在
-					if(_access(file,0))
-						_mkdir(file);
-					//产生随机数 生成该字的名 随机命名
-					srand((unsigned)time(NULL));
-					char filefullname[30];
-
-					do
-					{
-						_itoa(rand()%65356,num,10);
-						strcpy(filefullname,file);
-						strcat(filefullname,"\\");
-						strcat(filefullname,num);
-						strcat(filefullname,".bmp");
-					}while(!_access(filefullname,0));
-
-					cvSaveImage(filefullname,newsrc);
-				}
+				cvSaveImage("filefullname",newsrc);
+				cvReleaseMat(&submat);
+				cvReleaseImageHeader(&newsrc);
 			}
 		}
-
-		MessageBox(_T("图片保存成功"));
-		cvReleaseImage(&src);
 		OnNextPage();
 	}
 
@@ -771,27 +748,23 @@ IMPLEMENT_DYNCREATE(CRecognitionTextView, CScrollView)
 	void CRecognitionTextView::OnImagecut()
 	{
 		// TODO: 在此添加命令处理程序代码
-		if (fileCount >0) {
-			if (downX < 0)	
-				downX = 0;
-			if (downX > srcWidth) 
-				downX = srcWidth;
-			if (upX < 0)	
-				upX = 0;
-			if (upX > srcWidth) 
-				upX = srcWidth;
-			
-			if (downY < 0)
-				downY = 0;
-			if (downY > srcHeight)
-				downY = srcHeight;
-			if (upY < 0)
-				upY = 0;
-			if (upY > srcHeight)
-				upY = srcHeight;
+		if (fileCount >0)
+		{
+			if (outline.xSt < 0)	
+				outline.xSt = 0;
+			if (outline.xEnd > srcWidth) 
+				outline.xEnd  = srcWidth-1;
+
+			if (outline.ySt < 0)	
+				outline.ySt = 0;
+			if (outline.yEnd > srcHeight) 
+				outline.yEnd = srcHeight -1;
+
 			isCutted = true;
 
-		} else {
+		} 
+		else 
+		{
 			MessageBox(_T("请先加载图片"));
 		}
 	}

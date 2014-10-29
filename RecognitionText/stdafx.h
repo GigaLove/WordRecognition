@@ -9,7 +9,6 @@
 #define VC_EXTRALEAN            // 从 Windows 头中排除极少使用的资料
 #endif
 
-
 #include "targetver.h"
 
 #define _ATL_CSTRING_EXPLICIT_CONSTRUCTORS      // 某些 CString 构造函数将是显式的
@@ -34,13 +33,14 @@
 
 #include <afxcontrolbars.h>     // 功能区和控件条的 MFC 支持
 
-#define _CRT_SECURE_NO_WARNINGS
+
 #include <io.h>
 #include <direct.h>
 #include "opencv2/opencv.hpp"
+#include <vector>
+#include <stdlib.h>
 
-
-
+using namespace std;
 
 
 
@@ -60,21 +60,21 @@ typedef struct Rec{
 	boolean state;
 };
 
-//轮廓结构体
 struct OutLine
 {
-	 int Right;
-	 int Left;
-	 int Up;
-	 int Down;
-	 int code;
-	 int No;
+	int xSt;
+	int xEnd;
+	int ySt;
+	int yEnd;
+
+	int Line;
+	int Code;
 };
-//定义一个结构体来储存结果
-struct OutLinesInfo
-{
-	int rows;
-	int *columns;
-	int *BegEnd;
-	struct OutLine ** outlines;
-};
+
+
+//设计容器
+
+typedef vector<OutLine> OutLines;
+typedef vector<OutLines> OutLineSs;
+
+typedef vector<int> Lines;

@@ -51,11 +51,14 @@ public:
 private:
 	Tools tools;					//声明工具类
 	CString filePath;				//文件路径
-	IplImage *src;
+
+	IplImage * src;
+	OutLineSs outlineSs;
+	Lines lines;
+
 	char fileName[200][50];			//文件名存储数组
 	int index;						//记录文件在文件数组中的位置
 	int fileCount;
-	int removeList[100];			//删除列表
 	int rIndex;
 	CPoint downPoint;
 	CPoint upPoint;
@@ -75,28 +78,20 @@ private:
 	CPoint cutDownPoint;
 	CPoint cutUpPoint;
 
-	int downX;
-	int downY;
-	int upX;
-	int upY;
+	struct OutLine outline;
 
 private:
 	int m_nViewHeight;
 	int m_nVScrollPos;
 	int m_nVPageSize;
 	int LINESIZE;
-	int cutHeight;		
-
-	//int m_MAX_W, m_MAX_H;
-	//int m_vtop, m_hleft;
-	//int m_NowBmpW, m_NowBmpH;
-	
+	int cutHeight;	
+	int downX, downY, upX, upY;
 
 public:
 	afx_msg void OnLoadImage();				//加载图片处理函数
 	afx_msg void OnPreviousPage();			//上一页处理函数
 	afx_msg void OnNextPage();				//下一页处理函数
-	afx_msg void OnDeletePage();			//删除页处理函数
 	afx_msg void OnLButtonDown(UINT nFlags, CPoint point);		//鼠标左键按下处理函数
 	afx_msg void OnLButtonUp(UINT nFlags, CPoint point);		//鼠标右键按下处理函数
 	afx_msg void OnAdd();					//添加矩形处理函数
@@ -105,7 +100,6 @@ public:
 	void drawRectangle(int move_x, int move_y);
 	void clearMem();
 	void initData();
-	void drawCharacter(int move_x, int move_y);
 	void clsCutInfo();
 
 	afx_msg void OnDeal();
