@@ -45,6 +45,10 @@ IMPLEMENT_DYNCREATE(CRecognitionTextView, CScrollView)
 		ON_COMMAND(ID_SaveWords, &CRecognitionTextView::OnSavewords)
 		ON_COMMAND(ID_ImageCut, &CRecognitionTextView::OnImagecut)
 		ON_WM_MOUSEWHEEL()
+		ON_COMMAND(ID_Delete_Word, &CRecognitionTextView::OnDeleteWord)
+		ON_COMMAND(ID_Delete_Line, &CRecognitionTextView::OnDeleteLine)
+		ON_COMMAND(ID_Delete_WordsInArea, &CRecognitionTextView::OnDeleteWordsinarea)
+		ON_COMMAND(ID_Delete_Area, &CRecognitionTextView::OnDeleteArea)
 	END_MESSAGE_MAP()
 
 	// CRecognitionTextView 构造/析构
@@ -72,6 +76,7 @@ IMPLEMENT_DYNCREATE(CRecognitionTextView, CScrollView)
 		}
 	}
 
+	//初始化系统数据
 	void CRecognitionTextView::initData()
 	{
 		index = 0;
@@ -80,6 +85,7 @@ IMPLEMENT_DYNCREATE(CRecognitionTextView, CScrollView)
 		fileDictionary = "";
 		filePath = "";
 		isSized = false;
+		isCutted = false;
 		m_nVScrollPos = 0;		
 		clsCutInfo();
 	}
@@ -254,8 +260,8 @@ IMPLEMENT_DYNCREATE(CRecognitionTextView, CScrollView)
 	void CRecognitionTextView::OnLoadImage()
 	{
 		// TODO: 在此添加命令处理程序代
-		static TCHAR BASED_CODE szFilter[] = _T("Map Files (*.bmp)|*.bmp||");			//进行文件过滤
-		CFileDialog fileDialog(TRUE,NULL,NULL,OFN_HIDEREADONLY | OFN_OVERWRITEPROMPT, szFilter, this);
+		//static TCHAR BASED_CODE szFilter[] = _T("Map Files (*.*)|*.*||");			//进行文件过滤
+		CFileDialog fileDialog(TRUE,NULL,NULL,NULL,NULL,this);//OFN_HIDEREADONLY | OFN_OVERWRITEPROMPT, NULL, this);
 		if(fileDialog.DoModal() == IDOK)
 		{
 			initData();
@@ -319,10 +325,6 @@ IMPLEMENT_DYNCREATE(CRecognitionTextView, CScrollView)
 		{
 			if(index < fileCount-1)
 			{
-				//if(tools.outlinesinfo.rows >-1)		//判断当前图片是否处理过，处理过的话为true
-				//{
-				//	clearMem();			//清空结构体指针
-				//}
 				int tempIndex = index;
 				index += 1;
 
@@ -349,6 +351,11 @@ IMPLEMENT_DYNCREATE(CRecognitionTextView, CScrollView)
 	//清空结构体指针
 	void CRecognitionTextView::clearMem()
 	{
+		if(src != NULL)
+		{
+			cvReleaseImage(&src);
+			src = NULL;
+		}
 		if(outlineSs.size() != 0)
 		{
 			for(int i = 0;i<outlineSs.size();i++)
@@ -378,9 +385,21 @@ IMPLEMENT_DYNCREATE(CRecognitionTextView, CScrollView)
 		upPoint = point;
 		outline.xEnd = (point.x - xSt) * resizeX;
 		outline.yEnd = (point.y  + m_nVScrollPos)*resizeY;
+		isCutted = false;
 		CScrollView::OnLButtonUp(nFlags, point);
 	}
 
+	//拷贝数据
+	void CRecognitionTextView::CopyData(IplImage *src,IplImage *newsrc,int x,int y)
+	{
+		for(int i = 0;i < newsrc->width;i++)
+		{
+			for(int j = 0;j< newsrc->height;j++)
+			{
+				newsrc->imageData[j*newsrc->widthStep + i] = (uchar)src->imageData[(j+y)*src->widthStep + (x+i)];
+			}
+		}
+	}
 	//添加矩形处理函数
 	void CRecognitionTextView::OnAdd()
 	{
@@ -388,62 +407,77 @@ IMPLEMENT_DYNCREATE(CRecognitionTextView, CScrollView)
 		int up = int((downPoint.y+m_nVScrollPos) * resizeY);
 		int down = int((upPoint.y+m_nVScrollPos) * resizeY);
 		int left = int(downPoint.x - xSt)* resizeX;
-		int right = int(upPoint.x- xSt) * resizeX;
+		int right = int(upPoint.x - xSt) * resizeX;
 
 		int new_width = right - left;
 		int new_height = down - up;
 
+		//判断是否接收处理
+		if(new_width*new_height < 9)
+			return;
+		if(lines.size() <= 0)
+			return;
 		//获取位置然后获取该区域
-		CvMat* submat = new CvMat;
 
-		IplImage *newSrc = cvCreateImageHeader(cvSize(new_width,new_height),8,1);
+		IplImage *newSrc = cvCreateImage(cvSize(new_width,new_height),8,1);
+		CopyData(src,newSrc,left,up);
 
-		CvRect rect = cvRect(left,up,new_width,new_height);
-
-		cvGetSubRect(src,submat,rect);
-
-		cvGetImage(submat,newSrc);
-
+		//cvSmooth(newSrc,newSrc);
+		tools.Normal(newSrc);
+		cvSmooth(newSrc,newSrc);
 		//获取边缘
 		IplImage *edge = cvCreateImage(cvSize(new_width,new_height),8,1);
 		tools.getEdge(newSrc,edge);
+
 		//二值化
 		IplImage *throld = cvCreateImage(cvSize(new_width,new_height),8,1);
 		tools.OtsuTheld(edge,throld);
 
-		int xst = new_width,xen = 0;
-		int yst = new_height,yen = 0;
+		/*cvShowImage("",throld);
+		cvWaitKey();*/
 
-		for(int i=0 ;i<new_width ;i++)
+		int xSt = new_width,xEn = 0;
+		int ySt = new_height,yEn = 0;
+
+		for(int i = 2 ;i < throld->width -2 ;i++)
 		{
-			for(int j = 0;j<new_height;j++)
+			for(int j = 2;j < throld->height - 2;j++)
 			{
-				if(throld->imageData[j*src->widthStep + i] == 0)
+				if((uchar)throld->imageData[j*throld->widthStep + i] == 0) 
 				{
-					if(i<xst)
-						xst = i;
+					if(i < xSt)
+						xSt = i;
 
-					else if(i>yen)
-						yen = i;
+					if(i > xEn)
+						xEn = i;
 
-					if(j<yst)
-						yst = j;
+					if(j < ySt)
+						ySt = j;
 
-					else if(j>yen)
-						yen = j;
+					if(j > yEn)
+						yEn = j;
 				}
 			}
 		}
 
+		/*for(int i = xSt;i < xEn ;i++)
+		{
+			for(int j = ySt; j< yEn ;j++)
+			{
+				newSrc->imageData[j*newSrc->widthStep + i] = 0;
+			}
+		}*/
+
 		struct OutLine tempoutline;
-		tempoutline.xSt = xst + left;
-		tempoutline.xEnd = xen + left;
-		tempoutline.ySt = yst + up;
-		tempoutline.yEnd = yen + up;
+		tempoutline.xSt = xSt + left;
+		tempoutline.xEnd = xEn + left;
+		tempoutline.ySt = ySt + up;
+		tempoutline.yEnd = yEn + up;
 		//判断在哪一行
-		int cent = (yst + yen)/2 + up;
+		int cent = (ySt + yEn)/2 + up;
 		int temp = 1000;
 		int mark;
+
 		for(int i = 0;i<lines.size();i++)
 		{
 			if(abs(cent - lines[i]) < temp)
@@ -455,10 +489,25 @@ IMPLEMENT_DYNCREATE(CRecognitionTextView, CScrollView)
 
 		//插入改行
 		bool st = false;
+		int tempCode  = 0;
 		for(int i = mark;i < outlineSs.size();i++)
 		{
 			for(int j = 0; j< outlineSs.at(i).size();j++)
 			{
+				if(outlineSs.at(i).at(j).Code > tempCode)
+					tempCode = outlineSs.at(i).at(j).Code;
+
+				if(!st && i== mark && j == outlineSs.at(i).size()-1)
+				{
+					tempoutline.Code = tempCode;
+
+					outlineSs.at(i).push_back(tempoutline);
+
+					st = true;
+
+					j++;
+				}
+
 				if(outlineSs.at(i).at(j).Code == -1)
 					continue;
 
@@ -467,7 +516,7 @@ IMPLEMENT_DYNCREATE(CRecognitionTextView, CScrollView)
 					if(outlineSs.at(i).at(j).xSt > tempoutline.xSt)
 					{
 						tempoutline.Code = outlineSs.at(i).at(j).Code;
-						outlineSs.at(i).at(j).Code ++;
+						//outlineSs.at(i).at(j).Code ++;
 						//插入该元素
 						outlineSs.at(i).insert(outlineSs.at(i).begin()+j,tempoutline);
 						st = true;
@@ -481,6 +530,7 @@ IMPLEMENT_DYNCREATE(CRecognitionTextView, CScrollView)
 		}
 
 
+		cvReleaseImage(&newSrc);
 		cvReleaseImage(&edge);
 		cvReleaseImage(&throld);
 
@@ -495,7 +545,7 @@ IMPLEMENT_DYNCREATE(CRecognitionTextView, CScrollView)
 		int left = int(downPoint.x - xSt)* resizeX;
 		int right = int(upPoint.x- xSt) * resizeX;*/
 		int pt_x = int(downPoint.x - xSt)* resizeX;
-		int pt_y = int((downPoint.y+m_nVScrollPos) * resizeY);
+		int pt_y = int((downPoint.y + m_nVScrollPos) * resizeY);
 		//// TODO: 在此添加命令处理程序代码
 		bool st = false;
 		for(int i=0; i< outlineSs.size(); i++)
@@ -507,12 +557,13 @@ IMPLEMENT_DYNCREATE(CRecognitionTextView, CScrollView)
 
 				if(!st)
 				{
-					if(pt_x > outlineSs.at(i).at(j).xSt
-						&& pt_x < outlineSs.at(i).at(j).xEnd
-						&& pt_y > outlineSs.at(i).at(j).ySt
-						&& pt_y < outlineSs.at(i).at(j).yEnd)
+					if(pt_x >= outlineSs.at(i).at(j).xSt
+						&& pt_x <= outlineSs.at(i).at(j).xEnd
+						&& pt_y >= outlineSs.at(i).at(j).ySt
+						&& pt_y <= outlineSs.at(i).at(j).yEnd)
 					{
 						outlineSs.at(i).at(j).Code = -1;
+						st = true;
 					}
 				}
 				else
@@ -521,7 +572,7 @@ IMPLEMENT_DYNCREATE(CRecognitionTextView, CScrollView)
 				}
 
 			}
-		 }
+		}
 		OnPaint();
 	}
 
@@ -533,7 +584,7 @@ IMPLEMENT_DYNCREATE(CRecognitionTextView, CScrollView)
 			GetStockObject(NULL_BRUSH));
 
 		CBrush *pOldBrush=dc.SelectObject(pBrush);
-
+		int Count = 0;
 		if(outlineSs.size() > 0)
 		{
 			for(int i=0; i< outlineSs.size(); i++)
@@ -546,7 +597,7 @@ IMPLEMENT_DYNCREATE(CRecognitionTextView, CScrollView)
 					dc.Rectangle(CRect(CPoint(int(outlineSs.at(i).at(j).xSt/resizeX - move_x)+xSt, int(outlineSs.at(i).at(j).ySt/resizeY - move_y)),CPoint(int(outlineSs.at(i).at(j).xEnd/resizeX - move_x)+xSt, int(outlineSs.at(i).at(j).yEnd/resizeY - move_y))));
 					dc.TextOutW(int(outlineSs.at(i).at(j).xEnd/resizeX - move_x)+xSt + 10,int(outlineSs.at(i).at(j).ySt/resizeY - move_y) , CString(words[index*150+outlineSs.at(i).at(j).Code]));
 
-					char num[5];
+					char num[7];
 
 					_itoa(outlineSs.at(i).at(j).Code,num,10);
 					dc.TextOutW(int(outlineSs.at(i).at(j).xSt/resizeX - move_x)+xSt,int(outlineSs.at(i).at(j).yEnd/resizeY - move_y) + 10, CString(num));
@@ -560,27 +611,30 @@ IMPLEMENT_DYNCREATE(CRecognitionTextView, CScrollView)
 	void CRecognitionTextView::OnDeal()
 	{
 		// TODO: 在此添加命令处理程序代码
-		if(!isCutted)
+		if(src == NULL)
 		{
-			outline.xSt = 5;
-			outline.xEnd = srcWidth - 5;
-			outline.ySt = 5;
-			outline.yEnd = srcHeight - 5;
-		}
-		if(filePath !="")
-		{
-			if (tools.deal(filePath,src,&outlineSs,&lines,outline) == -1)
-				MessageBox(TEXT("加载失败！"));
+			if(filePath !="")
+			{
+				src = tools.deal(filePath,src,&outlineSs,&lines,outline,isCutted);
+				if(src == NULL)
+				{
+					MessageBox(TEXT("加载失败！"));
+				}
+				else
+				{
+					Invalidate();
+					drawRectangle(0, m_nVScrollPos);
+					OnPaint();
+				}
+			}
 			else
 			{
-				Invalidate();
-				drawRectangle(0, m_nVScrollPos);
-				OnPaint();
+				MessageBox(TEXT("未加载图片！"));
 			}
 		}
 		else
 		{
-			MessageBox(TEXT("未加载图片！"));
+			MessageBox(TEXT("不能处理图片！"));
 		}
 	}
 
@@ -694,55 +748,94 @@ IMPLEMENT_DYNCREATE(CRecognitionTextView, CScrollView)
 		}
 	}
 
-	//用来储存结果 一类字一个文件  一共就有7千多个文件
+
+	//同一个文件夹的结果储存在一起
 	void CRecognitionTextView::OnSavewords()
 	{
-		//按顺序储存 一张图的字 
-		//建立7356个文件夹 每一储存一类文件图片
 		for(int i=0; i< outlineSs.size(); i++)
 		{
 			for(int j = 0; j< outlineSs.at(i).size();j++)
 			{
-				if(outlineSs.at(i).at(j).Code == -1)
+				if(outlineSs.at(i).at(j).Code == -1)//如果该图已经被删除
 					continue;
-				//判断第 j个字是什么
-				int new_width = outlineSs.at(i).at(j).xEnd - outlineSs.at(i).at(j).xSt +1;
-				int new_height = outlineSs.at(i).at(j).yEnd - outlineSs.at(i).at(j).ySt + 1;
-				CvMat* submat = new CvMat;
-				IplImage *newsrc = cvCreateImageHeader(cvSize(new_width,new_height),8,1);
+				//从源图截取图片
+				int new_width = outlineSs.at(i).at(j).xEnd - outlineSs.at(i).at(j).xSt;
+				int new_height = outlineSs.at(i).at(j).yEnd - outlineSs.at(i).at(j).ySt;
 
-				CvRect rect = cvRect(outlineSs.at(i).at(j).xSt, outlineSs.at(i).at(j).ySt,new_width,new_height);
+				IplImage *newsrc = cvCreateImage(cvSize(new_width,new_height),8,1);
 
-				cvGetSubRect(src,submat,rect);
+				CopyData(src,newsrc,outlineSs.at(i).at(j).xSt,outlineSs.at(i).at(j).ySt);
 
-				cvGetImage(submat,newsrc);
-				//产生该字的文件名
-				char file[30] = "F:\\RS\\";
+				//贮备保存图
+				char file[50] = "E:\\黑体\\黑体六";
+				if(_access(file,0))
+				{
+					_mkdir(file);
+				}
+				strcat(file,"\\"); 
+
 				char num[6];
 				_itoa(outlineSs.at(i).at(j).Code + index*150,num,10);//计算其序数
-				strcat(file,num);
-				//判断文件夹是否存在
-				if(!_access(file,0))
-					_mkdir(file);
-				//产生随机数 生成该字的名 随机命名
-				srand((unsigned)time(NULL));
-				char filefullname[30];
-				do
-				{
-					_itoa(rand()/65356,num,10);
-					strcpy(filefullname,file);
-					strcat(filefullname,"\\");
-					strcat(filefullname,num);
-					strcat(filefullname,".bmp");
-				}while(_access(filefullname,0));
 
-				cvSaveImage("filefullname",newsrc);
-				cvReleaseMat(&submat);
-				cvReleaseImageHeader(&newsrc);
+				strcat(file,num);
+				strcat(file,".jpg");
+
+				cvSaveImage(file,newsrc);
+				/*cvReleaseMat(&submat);
+				cvReleaseImageHeader(&newsrc);*/
 			}
 		}
 		OnNextPage();
 	}
+	//用来储存结果 一类字一个文件  一共就有7千多个文件
+	//void CRecognitionTextView::OnSavewords()
+	//{
+	//	//按顺序储存 一张图的字 
+	//	//建立7356个文件夹 每一储存一类文件图片
+	//	for(int i=0; i< outlineSs.size(); i++)
+	//	{
+	//		for(int j = 0; j< outlineSs.at(i).size();j++)
+	//		{
+	//			if(outlineSs.at(i).at(j).Code == -1)
+	//				continue;
+	//			//判断第 j个字是什么
+	//			int new_width = outlineSs.at(i).at(j).xEnd - outlineSs.at(i).at(j).xSt +1;
+	//			int new_height = outlineSs.at(i).at(j).yEnd - outlineSs.at(i).at(j).ySt + 1;
+	//			CvMat* submat = new CvMat;
+	//			IplImage *newsrc = cvCreateImageHeader(cvSize(new_width,new_height),8,1);
+
+	//			CvRect rect = cvRect(outlineSs.at(i).at(j).xSt, outlineSs.at(i).at(j).ySt,new_width,new_height);
+
+	//			cvGetSubRect(src,submat,rect);
+
+	//			cvGetImage(submat,newsrc);
+	//			//产生该字的文件名
+	//			char file[30] = "F:\\RS\\";
+	//			char num[6];
+	//			_itoa(outlineSs.at(i).at(j).Code + index*150,num,10);//计算其序数
+	//			strcat(file,num);
+	//			//判断文件夹是否存在
+	//			if(!_access(file,0))
+	//				_mkdir(file);
+	//			//产生随机数 生成该字的名 随机命名
+	//			srand((unsigned)time(NULL));
+	//			char filefullname[30];
+	//			do
+	//			{
+	//				_itoa(rand()/65356,num,10);
+	//				strcpy(filefullname,file);
+	//				strcat(filefullname,"\\");
+	//				strcat(filefullname,num);
+	//				strcat(filefullname,".bmp");
+	//			}while(_access(filefullname,0));
+
+	//			cvSaveImage("filefullname",newsrc);
+	//			cvReleaseMat(&submat);
+	//			cvReleaseImageHeader(&newsrc);
+	//		}
+	//	}
+	//	OnNextPage();
+	//}
 
 
 	void CRecognitionTextView::OnImagecut()
@@ -760,8 +853,8 @@ IMPLEMENT_DYNCREATE(CRecognitionTextView, CScrollView)
 			if (outline.yEnd > srcHeight) 
 				outline.yEnd = srcHeight -1;
 
-			isCutted = true;
-
+			if((outline.xEnd - outline.xSt)*(outline.yEnd - outline.ySt) > 9)
+				isCutted = true;
 		} 
 		else 
 		{
@@ -782,4 +875,131 @@ IMPLEMENT_DYNCREATE(CRecognitionTextView, CScrollView)
 			OnVScroll(SB_LINEUP, 0, &m_VScrollBar);
 		}
 		return CScrollView::OnMouseWheel(nFlags, zDelta, pt);
+	}
+
+
+	void CRecognitionTextView::OnDeleteWord()
+	{
+		// TODO: 在此添加命令处理程序代码
+		int pt_x = int(downPoint.x - xSt)* resizeX;
+		int pt_y = int((downPoint.y + m_nVScrollPos) * resizeY);
+		//// TODO: 在此添加命令处理程序代码
+		bool st = false;
+		for(int i=0; i< outlineSs.size(); i++)
+		{
+			for(int j = 0; j< outlineSs.at(i).size();j++)
+			{
+				if(outlineSs.at(i).at(j).Code == -1)
+					continue;
+
+				if(!st)
+				{
+					if(pt_x >= outlineSs.at(i).at(j).xSt
+						&& pt_x <= outlineSs.at(i).at(j).xEnd
+						&& pt_y >= outlineSs.at(i).at(j).ySt
+						&& pt_y <= outlineSs.at(i).at(j).yEnd)
+					{
+						outlineSs.at(i).at(j).Code = -1;
+						st = true;
+					}
+				}
+				if(st)
+					break;
+			}
+			if(st)
+				break;
+		}
+		OnPaint();
+	}
+
+
+	void CRecognitionTextView::OnDeleteLine()
+	{
+		// TODO: 在此添加命令处理程序代码
+		int pt_x = int(downPoint.x - xSt)* resizeX;
+		int pt_y = int((downPoint.y + m_nVScrollPos) * resizeY);
+
+		int ds = 1000;
+		int ls;
+		for(int i = 0;i < lines.size();i++)
+		{
+			if(ds > abs(pt_y - lines.at(i)))
+			{
+				ds = abs(pt_y - lines.at(i));
+				ls = i;
+			}
+		}
+
+		for(int i = 0; i< outlineSs.at(ls).size() ;i++)
+		{
+			outlineSs.at(ls).at(i).Code = -1;
+		}
+
+		OnPaint();
+	}
+
+
+	void CRecognitionTextView::OnDeleteWordsinarea()
+	{
+		// TODO: 在此添加命令处理程序代码
+		int up = int((downPoint.y+m_nVScrollPos) * resizeY);
+		int down = int((upPoint.y+m_nVScrollPos) * resizeY);
+		int left = int(downPoint.x - xSt)* resizeX;
+		int right = int(upPoint.x- xSt) * resizeX;
+
+		for(int i=0; i< outlineSs.size(); i++)
+		{
+			for(int j = 0; j< outlineSs.at(i).size();j++)
+			{
+				if(outlineSs.at(i).at(j).Code == -1)
+					continue;
+
+				if(left <= outlineSs.at(i).at(j).xSt
+					&& right >= outlineSs.at(i).at(j).xEnd
+					&& up <= outlineSs.at(i).at(j).ySt
+					&& down >= outlineSs.at(i).at(j).yEnd)
+				{
+					outlineSs.at(i).at(j).Code = -1;
+				}
+
+			}
+		}
+		OnPaint();
+	}
+
+
+	void CRecognitionTextView::OnDeleteArea()
+	{
+		// TODO: 在此添加命令处理程序代码
+		int up = int((downPoint.y+m_nVScrollPos) * resizeY);
+		int down = int((upPoint.y+m_nVScrollPos) * resizeY);
+		int left = int(downPoint.x - xSt)* resizeX;
+		int right = int(upPoint.x- xSt) * resizeX;
+
+		int st = false;
+		for(int i=0; i< outlineSs.size(); i++)
+		{
+			for(int j = 0; j< outlineSs.at(i).size();j++)
+			{
+				if(outlineSs.at(i).at(j).Code == -1)
+					continue;
+
+				if(!st)
+				{
+					if(left <= outlineSs.at(i).at(j).xSt
+						&& right >= outlineSs.at(i).at(j).xEnd
+						&& up <= outlineSs.at(i).at(j).ySt
+						&& down >= outlineSs.at(i).at(j).yEnd)
+					{
+						outlineSs.at(i).at(j).Code = -1;
+						st = true;
+					}
+				}
+				else
+				{
+					outlineSs.at(i).at(j).Code --;
+				}
+			}
+		}
+		OnPaint();
 	}

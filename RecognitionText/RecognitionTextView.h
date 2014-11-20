@@ -101,6 +101,7 @@ public:
 	void clearMem();
 	void initData();
 	void clsCutInfo();
+	void CopyData(IplImage *src,IplImage *newsrc,int x,int y);
 
 	afx_msg void OnDeal();
 	afx_msg void OnSize(UINT nType, int cx, int cy);
@@ -110,6 +111,10 @@ public:
 	afx_msg void OnSavewords();
 	afx_msg void OnImagecut();
 	afx_msg BOOL OnMouseWheel(UINT nFlags, short zDelta, CPoint pt);
+	afx_msg void OnDeleteWord();
+	afx_msg void OnDeleteLine();
+	afx_msg void OnDeleteWordsinarea();
+	afx_msg void OnDeleteArea();
 };
 
 #ifndef _DEBUG  // RecognitionTextView.cpp 中的调试版本

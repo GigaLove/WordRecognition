@@ -173,7 +173,34 @@ void Tools::quicksort(int i,int j,int *data)/*快速排序*/
 			quicksort(k,j,data);
 	}
 }
+//归一化像素值
+void Tools::Normal(IplImage *src)
+{
+	//找到最大的值
+	int Min = 255;
+	int Max = 0;
+	for(int i = 0; i< src->width ;i++)
+	{
+		for(int j = 0;j<src->height;j++)
+		{
+			if((uchar)src->imageData[j*src->widthStep + i] > Max)
+				Max = (uchar)src->imageData[j*src->widthStep + i];
+			
+			if((uchar)src->imageData[j*src->widthStep + i] < Min )
+				Min = (uchar)src->imageData[j*src->widthStep + i];
+		}
+	}
 
+	float R = 255.0/(Max - Min);
+
+	for(int i = 0; i< src->width ;i++)
+	{
+		for(int j = 0;j<src->height;j++)
+		{
+			src->imageData[j*src->widthStep + i]  = ((uchar)src->imageData[j*src->widthStep + i] - Min)*R;
+		}
+	}
+}
 
 int Tools::Otsu(IplImage *src)
 {
@@ -238,6 +265,7 @@ int Tools::Otsu(IplImage *src)
 
 	return theld;
 }
+
 
 void Tools::OtsuTheld(IplImage *src,IplImage *new_src)
 {
@@ -335,7 +363,7 @@ void Tools::GetWords(IplImage *src,struct OutLine outLine,OutLines *outlines)
 				src->imageData[j*widthStep + i] = 128;
 				FindOther(src,i,j,outLine,&tempoutline);
 
-				if(tempoutline.Code >= 5)
+				if(tempoutline.Code > 5)
 					outlines->push_back(tempoutline);
 			}
 		}
@@ -358,10 +386,10 @@ void Tools::SetInOrder(OutLines outlines,OutLineSs *outLineSs,Lines *lines)
 		//和所有行计算距离
 		for(int j = 0;j< lines->size();j++)
 		{
-			if(abs(wordline - (*lines)[j]) < Dis)
+			if(abs(wordline - lines->at(j)) < Dis)
 			{
 				line = j;
-				Dis = abs(wordline - (*lines)[j]);
+				Dis = abs(wordline - lines->at(j));
 			}
 		}
 		outlines[i].Line = line;
@@ -375,7 +403,7 @@ void Tools::SetInOrder(OutLines outlines,OutLineSs *outLineSs,Lines *lines)
 	int Threld = 10;
 	int Code = 0;
 	OutLines tempouelines;
-
+	//对每一行进行统计排序
 	for(int i = 0;i<lines->size();i++)
 	{
 		tempLeft = 0;
@@ -383,7 +411,7 @@ void Tools::SetInOrder(OutLines outlines,OutLineSs *outLineSs,Lines *lines)
 		{
 			st = true;
 			temp = 3000;
-
+			//
 			for(int j=0; j<outlines.size(); j++)
 			{
 				if(outlines[j].Line == i)
@@ -391,7 +419,7 @@ void Tools::SetInOrder(OutLines outlines,OutLineSs *outLineSs,Lines *lines)
 					if(outlines[j].xSt >= tempLeft && outlines[j].xSt < temp)
 					{
 						tempCode = j;
-						temp = outlines[j].xSt;
+						temp = outlines[j].xSt;//找到当前最左边的笔画
 						st =false;
 					}
 				}
@@ -408,16 +436,15 @@ void Tools::SetInOrder(OutLines outlines,OutLineSs *outLineSs,Lines *lines)
 			//进行操作
 			if(tempouelines.size() == 0)
 			{
-				outlines[tempCode].Line = -1;
 				outlines[tempCode].Code = Code;
 				tempLeft = outlines[tempCode].xSt;
 				tempouelines.push_back(outlines[tempCode]);
+				outlines[tempCode].Line = -1;
 				Code ++;
 			}
 			//否则判断是否融合
 			else
 			{
-				outlines[tempCode].Line = -1;
 				outlines[tempCode].Code = Code;
 
 				//printf("%d\t%d\n",tempouelines[tempouelines.size() -1].xEnd,outlines[tempCode].xSt - Threld);
@@ -440,13 +467,33 @@ void Tools::SetInOrder(OutLines outlines,OutLineSs *outLineSs,Lines *lines)
 					tempouelines.push_back(outlines[tempCode]);
 					Code ++;
 				}
+				outlines[tempCode].Line = -1;
 			}
 		}
 
+		//检查大小位置
 		/*for(int j = 0;j< outLineSs->at(i).size(); j++)
 		{
 			printf("%d\n",outLineSs->at(i).at(j).Code);
 		}*/
+	}
+
+	Code = 0;
+	for(int i = 0;i<outLineSs->size() ;i++)
+	{
+		for(int j = 0 ;j < outLineSs->at(i).size();j++)
+		{
+			if((outLineSs->at(i).at(j).xEnd - outLineSs->at(i).at(j).xSt)*
+				(outLineSs->at(i).at(j).yEnd - outLineSs->at(i).at(j).ySt) < 20)
+			{
+				outLineSs->at(i).at(j).Code = -1;
+				Code ++;
+			}
+			else
+			{
+				outLineSs->at(i).at(j).Code = outLineSs->at(i).at(j).Code - Code;
+			}
+		}
 	}
 }
 //现在X方向进行融合 然后再X方向进行分组
@@ -458,7 +505,7 @@ void Tools::GetLines(int *xValue,int Num,Lines *lines)
 
 	for(int i = 1;i < Num;i++)
 	{
-		if(xValue[i] - xValue[i-1] < 18)
+		if(xValue[i] - xValue[i-1] < 20)
 		{
 			Sum += xValue[i];
 			Count ++;
@@ -480,7 +527,7 @@ void Tools::GetLines(int *xValue,int Num,Lines *lines)
 		}
 	}
 }
-int Tools::deal(CString filePath,IplImage *src,OutLineSs *outlineSs,Lines *lines,struct OutLine outLine)
+IplImage* Tools::deal(CString filePath,IplImage *src,OutLineSs *outlineSs,Lines *lines,struct OutLine outLine,bool isCutted)
 {
 
 	char * filePathName;
@@ -489,9 +536,11 @@ int Tools::deal(CString filePath,IplImage *src,OutLineSs *outlineSs,Lines *lines
 	filePathName = T2A(filePath);
 
 	src = cvLoadImage(filePathName,0);
-
+	if(src == NULL)
+		return NULL;
 	//降采样
 	IplImage * newSrc = pyrDown(src);
+	Normal(newSrc);
 	cvSmooth(newSrc,newSrc);
 	//获取特殊边缘信息
 	IplImage *edge = cvCreateImage(cvSize(newSrc->width,newSrc->height),8,1);
@@ -502,9 +551,27 @@ int Tools::deal(CString filePath,IplImage *src,OutLineSs *outlineSs,Lines *lines
 	IplImage *threld = cvCreateImage(cvSize(newSrc->width,newSrc->height),8,1);
 	OtsuTheld(edge,threld);
 
+	//
+	int time = src->width/newSrc->width;
+	if(!isCutted)
+	{
+		outLine.xSt = 10;
+		outLine.xEnd = newSrc->width - 10;
+		outLine.ySt = 10;
+		outLine.yEnd = newSrc->height - 10;
+	}
+
+	else
+	{
+		outLine.xSt = outLine.xSt/time;
+		outLine.xEnd = outLine.xEnd/time;
+		outLine.ySt = outLine.ySt/time;
+		outLine.yEnd = outLine.yEnd/time;
+	}
 	//储存初次获得的轮廓
 	OutLines outLines;
 	GetWords(threld,outLine,&outLines);
+ 
 	//获取y方向的分布值
 	int *xValue = new int[outLines.size()];
 	for(int i = 0;i < outLines.size();i++)
@@ -519,7 +586,6 @@ int Tools::deal(CString filePath,IplImage *src,OutLineSs *outlineSs,Lines *lines
 	//获得排序的结果
 	SetInOrder(outLines,outlineSs,lines);
 
-	int time = src->width/newSrc->width;
 	for(int i = 0; i<outlineSs->size();i++)
 	{
 		for(int j = 0; j<outlineSs->at(i).size();j++)
@@ -537,12 +603,8 @@ int Tools::deal(CString filePath,IplImage *src,OutLineSs *outlineSs,Lines *lines
 	cvReleaseImage(&edge);
 	cvReleaseImage(&threld);
 
-	return 1;
+	return src;
 }
-
-
-
-
 
 
 

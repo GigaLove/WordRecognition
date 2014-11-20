@@ -52,13 +52,21 @@
 #define ID_SaveWords                    32791
 #define ID_32792                        32792
 #define ID_ImageCut                     32793
+#define ID_32794                        32794
+#define ID_Delete_Word                  32795
+#define ID_Delete_Line                  32796
+#define ID_32797                        32797
+#define ID_DeleteWordsInArea            32798
+#define ID_Delete_WordsInArea           32799
+#define ID_32800                        32800
+#define ID_Delete_Area                  32801
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        310
-#define _APS_NEXT_COMMAND_VALUE         32794
+#define _APS_NEXT_COMMAND_VALUE         32802
 #define _APS_NEXT_CONTROL_VALUE         1000
 #define _APS_NEXT_SYMED_VALUE           310
 #endif
